@@ -61,26 +61,28 @@ crsp <- merge(crsp, size, by=c("PERMNO", "pyear"))
 crsp.clean <- crsp[order(crsp$PERMNO, crsp$year, crsp$month),]
 rm(crsp, size, junes)
 
-trailing.months <- function(x, year, month, from, to) {
-    from.year <- year - as.integer(from / 12) - ifelse(from %% 12 < month, 0, 1)
-    from.month <- month - from %% 12 + ifelse(month - from %% 12 > 0, 0, 12)
-    to.year <- year - as.integer(to / 12) - ifelse(to %% 12 < month, 0, 1)
-    to.month <- month - to %% 12 + ifelse(month - to %% 12 > 0, 0, 12)
-    return (x[((x$year == from.year & x$month >= from.month) | (x$year > from.year)) & 
-        ((x$year == to.year & x$month <= to.month) | (x$year < to.year)),])
+# given an array of returns, computes the compounded returns using a 
+# sliding window which runs from (t-from) to (t-to)
+trailing.compound.return <- function(ret, from, to) {
+    nper <- length(ret)
+    # take advantage of cumsum to greatly speed up calculations
+    cum.ret <- cumsum(log(1 + ret))
+    compound.ret <- vector(mode="numeric", length=nper)
+    compound.ret[1:from] <- NA
+    compound.ret[from + 1] <- cum.ret[from - to + 1]
+    # use indexing to subtract cumulative sums rather than looping
+    compound.ret[(from + 2):nper] <- cum.ret[(from - to + 2):(nper - to)] - cum.ret[1:(nper - from - 1)]
+    return (exp(compound.ret) - 1)
 }
 
-compound.return <- function(row, data, from, to) {
-    months <- trailing.months(data, as.numeric(row["year"]), as.numeric(row["month"]), from, to)
-    if (nrow(months) > 0) {
-        return (exp(sum(log(1 + months$RET))) - 1)
-    } else {
-        return (0)
-    }
-}
-
-# calculate momentum returns for each stock for each month
+# calculate compound momentum and reversal returns
+tic <- proc.time()
 for (i in stocks) {
-    crsp.clean$mom.ret[crsp.clean$PERMNO == i] <- apply(crsp.clean[crsp.clean$PERMNO == i,], 1, compound.return, crsp.clean[crsp.clean$PERMNO == i,], 12, 2)
-    crsp.clean$rev.ret[crsp.clean$PERMNO == i] <- apply(crsp.clean[crsp.clean$PERMNO == i,], 1, compound.return, crsp.clean[crsp.clean$PERMNO == i,], 60, 13)
+    crsp.clean$momentum[crsp.clean$PERMNO == i] <- trailing.compound.return(crsp.clean$RET[crsp.clean$PERMNO == i], 12, 2)
+    crsp.clean$reversal[crsp.clean$PERMNO == i] <- trailing.compound.return(crsp.clean$RET[crsp.clean$PERMNO == i], 60, 13)
 }
+toc <- proc.time()
+print(toc - tic) # time momentum/reversal calculations
+
+# save the results
+save(crsp.clean, file="smr.Rdata")
