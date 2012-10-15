@@ -42,17 +42,17 @@ crsp$RETX[is.na(crsp$RETX)] <- crsp$DLRETX[is.na(crsp$RETX)]
 crsp$DLRET <- NULL
 crsp$DLRETX <- NULL
 crsp$SHRCD <- NULL
-crsp$EXCHCD <- NULL
 crsp$SICCD <- NULL
 
 # remove observations with missing returns
 crsp <- crsp[!is.na(crsp$RET) & !is.na(crsp$RETX),]
 
-# calculate portfolio dates
+# calculate portfolio datescrsp
 crsp$pyear <- ifelse(crsp$month < 7, crsp$year - 1, crsp$year)
 crsp$pmonth <- ifelse(crsp$month < 7, crsp$month + 6, crsp$month - 6)
 
 # calculate market capitalization
+## june only
 junes <- crsp$month == 6
 size <- data.frame(PERMNO=crsp$PERMNO[junes], pyear=crsp$year[junes], mktcap=(crsp$SHROUT[junes] * abs(crsp$PRC[junes])))
 crsp <- merge(crsp, size, by=c("PERMNO", "pyear"))
@@ -60,6 +60,16 @@ crsp <- merge(crsp, size, by=c("PERMNO", "pyear"))
 # sort the cleaned data and remove unused variables
 crsp.clean <- crsp[order(crsp$PERMNO, crsp$year, crsp$month),]
 rm(crsp, size, junes)
+
+# calculate lagged monthly market cap
+crsp.clean$lagmktcap <- crsp.clean$SHROUT * abs(crsp.clean$PRC)
+for (i in stocks) {
+    rows <- crsp.clean$PERMNO == i
+    months <- crsp.clean$month[rows]
+    nmonth <- length(months)
+    crsp.clean$lagmktcap[rows][-1] <- ifelse((months[-1] == (months[-nmonth] + 1) %% 12) | (months[-nmonth] == 11 & months[-1] == 12), crsp.clean$lagmktcap[rows][-nmonth], rep(NA, nmonth-1))
+    crsp.clean$lagmktcap[rows][1] <- NA
+}
 
 # given an array of returns, computes the compounded returns using a 
 # sliding window which runs from (t-from) to (t-to)
