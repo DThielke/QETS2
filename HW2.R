@@ -54,12 +54,12 @@ crsp$pmonth <- ifelse(crsp$month < 7, crsp$month + 6, crsp$month - 6)
 # calculate market capitalization
 ## june only
 junes <- crsp$month == 6
-size <- data.frame(PERMNO=crsp$PERMNO[junes], pyear=crsp$year[junes], mktcap=(crsp$SHROUT[junes] * abs(crsp$PRC[junes])))
+size <- data.frame(PERMNO=crsp$PERMNO[junes], pyear=crsp$year[junes], EXCHCD=crsp$EXCHCD[junes], mktcap=(crsp$SHROUT[junes] * abs(crsp$PRC[junes])))
 crsp <- merge(crsp, size, by=c("PERMNO", "pyear"))
 
 # sort the cleaned data and remove unused variables
 crsp.clean <- crsp[order(crsp$PERMNO, crsp$year, crsp$month),]
-rm(crsp, size, junes)
+rm(crsp, junes)
 
 # calculate lagged monthly market cap
 crsp.clean$lagmktcap <- crsp.clean$SHROUT * abs(crsp.clean$PRC)
@@ -96,3 +96,4 @@ print(toc - tic) # time momentum/reversal calculations
 
 # save the results
 save(crsp.clean, file="smr.Rdata")
+save(size, file="size.Rdata")
